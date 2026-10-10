@@ -4,3 +4,10 @@
 *.ptx
 *.cubin
 *.fatbin
+
+.vscode/
+.repos/
+
+*.log
+
+__pycache__/
