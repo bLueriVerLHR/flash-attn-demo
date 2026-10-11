@@ -6,8 +6,6 @@ from lib.utils.timer import cuda_timer
 from lib.kernel import flash_attn_demo
 from lib.cukernel import flash_attn_demo_cu_V1, flash_attn_demo_cu_V2
 
-
-
 @cuda_timer("flash_attn")
 def flash_attn(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
     return fa.flash_attn_func(Q, K, V)
@@ -35,7 +33,7 @@ def flash_attn_demo_cu_wrapper(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor
     return flash_attn_demo_cu_V1.flash_attn_demo_cu(Q, K, V)
 
 
-@cuda_timer("flash_attn_demo_cuda_v2", warmup=1, rep=2)
+@cuda_timer("flash_attn_demo_cuda_v2")
 def flash_attn_demo_cu_wrapper_v2(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
     return flash_attn_demo_cu_V2.flash_attn_demo_cu(Q, K, V)
 
@@ -69,7 +67,7 @@ if __name__ == "__main__":
         # a = torch_attn(q, k, v)
         b = flash_attn(q, k, v)
         # c = flash_attn_demo_wrapper(q, k, v)
-        d = flash_attn_demo_cu_wrapper(q, k, v)
+        # d = flash_attn_demo_cu_wrapper(q, k, v)
         e = flash_attn_demo_cu_wrapper_v2(q, k, v)
 
         torch.testing.assert_close(e, b, atol=1e-2, rtol=1e-2)

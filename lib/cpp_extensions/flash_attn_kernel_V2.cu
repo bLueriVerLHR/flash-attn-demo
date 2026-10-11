@@ -18,8 +18,8 @@ namespace py = pybind11;
 
 using index_t = int64_t;
 
-void FlashAttnDemoLauncher(const FlashAttnKernelArgs& args, int batch_size, int q_sql_len, int q_n_heads, cudaStream_t stream) {
-    dim3 grid(q_sql_len / kBr, q_n_heads, batch_size);
+void FlashAttnDemoLauncher(const FlashAttnKernelArgs& args, int batch_size, int q_seq_len, int q_n_heads, cudaStream_t stream) {
+    dim3 grid(q_seq_len / kBr, q_n_heads, batch_size);
     dim3 block(kNumberOfThreads);
 
     FlashAttnKernel<half><<<grid, block, kSharedMemorySize, stream>>>(args);
@@ -40,6 +40,9 @@ torch::Tensor FlashAttnDemoWrapper(
 
     TORCH_CHECK(Q.size(-3) % kBr == 0, "seq_len_q must be multiple of ", kBr);
     TORCH_CHECK(K.size(-3) % kBc == 0 and V.size(-3) % kBc == 0, "seq_len_kv must be multiple of ", kBc);
+
+   TORCH_CHECK(Q.size(-1) == kHeadDim && K.size(-1) == kHeadDim && V.size(-1) == kHeadDim,
+               "Q/K/V head_dim must equal ", kHeadDim);
 
     Q = Q.contiguous();
     K = K.contiguous();

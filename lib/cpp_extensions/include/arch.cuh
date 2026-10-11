@@ -9,20 +9,11 @@ constexpr int kMmaK = 16;
 
 constexpr int kLdMatrixSize = 8;
 constexpr int kCpAsyncLen = 16;
+constexpr int kElemPerCpAsync = kCpAsyncLen / sizeof(half);
 
 constexpr int kWarpSize = 32;
 constexpr int kNumberOfWarps = 4;
 constexpr int kNumberOfThreads = kWarpSize * kNumberOfWarps;
-constexpr int kNumberOfRegsPerF32AccumFragment = 2;
-
-constexpr int kGsmLdStRowsPerIter = 4;
-
-constexpr int kBytePerVec4Access = 16;
-constexpr int kElemPerVec4Access = kBytePerVec4Access / sizeof(half);
-
-constexpr int kTensorOpM = 4;
-constexpr int kTensorOpN = 2;
-constexpr int kTensorOpK = 4;
 
 template <typename value_t>
 DEVICE_FUNC uint32_t
