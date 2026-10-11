@@ -76,13 +76,13 @@ FlashAttnKernel(FlashAttnKernelArgs args) {
 
     do /* prefetch Q block */ {
         #pragma unroll
-        for (index_t i = 0; i < kBr * kHeadDim / (kElemPerCpAsync * kNumberOfThreads); ++i) {
+        for (index_t i = 0; i < kBr * kHeadDim / (kElemsPerCpAsync * kNumberOfThreads); ++i) {
             const index_t idx = tid + i * kNumberOfThreads;
-            constexpr index_t kThreadPerRow = kHeadDim / kElemPerCpAsync;
+            constexpr index_t kThreadPerRow = kHeadDim / kElemsPerCpAsync;
             const index_t row = idx / kThreadPerRow;
-            const index_t col = idx % kThreadPerRow * kElemPerCpAsync;
+            const index_t col = idx % kThreadPerRow * kElemsPerCpAsync;
             const index_t smem_col = SwizzledCol(row, col);
-            CpAsync<kCpAsyncLen>(
+            CpAsync<kCpAsyncBytes>(
                 smem.q + row * kHeadDim + smem_col,
                 gmem.q + row * args.q_seq_stride + col
             );
@@ -92,13 +92,13 @@ FlashAttnKernel(FlashAttnKernelArgs args) {
 
     do /* prefetch first K block */ {
         #pragma unroll
-        for (index_t i = 0; i < kBc * kHeadDim / (kElemPerCpAsync * kNumberOfThreads); ++i) {
+        for (index_t i = 0; i < kBc * kHeadDim / (kElemsPerCpAsync * kNumberOfThreads); ++i) {
             const index_t idx = tid + i * kNumberOfThreads;
-            constexpr index_t kThreadPerRow = kHeadDim / kElemPerCpAsync;
+            constexpr index_t kThreadPerRow = kHeadDim / kElemsPerCpAsync;
             const index_t row = idx / kThreadPerRow;
-            const index_t col = idx % kThreadPerRow * kElemPerCpAsync;
+            const index_t col = idx % kThreadPerRow * kElemsPerCpAsync;
             const index_t smem_col = SwizzledCol(row, col);
-            CpAsync<kCpAsyncLen>(
+            CpAsync<kCpAsyncBytes>(
                 smem.k + row * kHeadDim + smem_col,
                 gmem.k + row * args.kv_seq_stride + col
             );
@@ -119,11 +119,11 @@ FlashAttnKernel(FlashAttnKernelArgs args) {
 
         do /* fetch current V */ {
             #pragma unroll
-            for (index_t i = 0; i < (kBc * kHeadDim) / (kElemPerCpAsync * kNumberOfThreads); ++i) {
+            for (index_t i = 0; i < (kBc * kHeadDim) / (kElemsPerCpAsync * kNumberOfThreads); ++i) {
                 const index_t idx = tid + i * kNumberOfThreads;
-                constexpr index_t kThreadPerRow = kHeadDim / kElemPerCpAsync;
+                constexpr index_t kThreadPerRow = kHeadDim / kElemsPerCpAsync;
                 const index_t row = idx / kThreadPerRow;
-                const index_t col = idx % kThreadPerRow * kElemPerCpAsync;
+                const index_t col = idx % kThreadPerRow * kElemsPerCpAsync;
                 const index_t smem_col = SwizzledCol(row, col);
                 CpAsync<16>(
                     smem.v + row * kHeadDim + smem_col,
@@ -172,11 +172,11 @@ FlashAttnKernel(FlashAttnKernelArgs args) {
 
         if (ikv + 1 < num_kv_blk) /* prefetch overlapped by computation */ {
             #pragma unroll
-            for (index_t i = 0; i < (kBc * kHeadDim) / (kElemPerCpAsync * kNumberOfThreads); ++i) {
+            for (index_t i = 0; i < (kBc * kHeadDim) / (kElemsPerCpAsync * kNumberOfThreads); ++i) {
                 const index_t idx = tid + i * kNumberOfThreads;
-                constexpr index_t kThreadPerRow = kHeadDim / kElemPerCpAsync;
+                constexpr index_t kThreadPerRow = kHeadDim / kElemsPerCpAsync;
                 const index_t row = idx / kThreadPerRow;
-                const index_t col = idx % kThreadPerRow * kElemPerCpAsync;
+                const index_t col = idx % kThreadPerRow * kElemsPerCpAsync;
                 const index_t smem_col = SwizzledCol(row, col);
                 CpAsync<16>(
                     smem.k + row * kHeadDim + smem_col,

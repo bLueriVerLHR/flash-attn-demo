@@ -8,8 +8,8 @@ constexpr index_t kMmaN = 8;
 constexpr index_t kMmaK = 16;
 
 constexpr index_t kLdMatrixSize = 8;
-constexpr index_t kCpAsyncLen = 16;
-constexpr index_t kElemPerCpAsync = kCpAsyncLen / sizeof(half);
+constexpr index_t kCpAsyncBytes = 16;
+constexpr index_t kElemsPerCpAsync = kCpAsyncBytes / sizeof(half);
 
 constexpr index_t kWarpSize = 32;
 constexpr index_t kNumberOfWarps = 4;
