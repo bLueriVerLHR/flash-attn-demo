@@ -16,8 +16,6 @@
 
 namespace py = pybind11;
 
-using index_t = int64_t;
-
 void FlashAttnDemoLauncher(const FlashAttnKernelArgs& args, int batch_size, int q_seq_len, int q_n_heads, cudaStream_t stream) {
     dim3 grid(q_seq_len / kBr, q_n_heads, batch_size);
     dim3 block(kNumberOfThreads);
@@ -49,7 +47,7 @@ torch::Tensor FlashAttnDemoWrapper(
     V = V.contiguous();
 
     // output tensor
-    torch::Tensor O = torch::zeros_like(Q);
+    torch::Tensor O = torch::empty_like(Q);
     FlashAttnKernelArgs args{};
 
     args.q = Q.data_ptr();

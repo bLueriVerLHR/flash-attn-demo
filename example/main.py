@@ -48,7 +48,7 @@ def build_qkv(batch_size: int, seq_len: int, d_model: int):
 
 
 if __name__ == "__main__":
-    torch.cuda.set_device(2)
+    torch.cuda.set_device(0)
     torch.manual_seed(42)
 
     config = [

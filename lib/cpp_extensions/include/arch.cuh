@@ -3,17 +3,17 @@
 #include <cinttypes>
 #include "def.cuh"
 
-constexpr int kMmaM = 16;
-constexpr int kMmaN = 8;
-constexpr int kMmaK = 16;
+constexpr index_t kMmaM = 16;
+constexpr index_t kMmaN = 8;
+constexpr index_t kMmaK = 16;
 
-constexpr int kLdMatrixSize = 8;
-constexpr int kCpAsyncLen = 16;
-constexpr int kElemPerCpAsync = kCpAsyncLen / sizeof(half);
+constexpr index_t kLdMatrixSize = 8;
+constexpr index_t kCpAsyncLen = 16;
+constexpr index_t kElemPerCpAsync = kCpAsyncLen / sizeof(half);
 
-constexpr int kWarpSize = 32;
-constexpr int kNumberOfWarps = 4;
-constexpr int kNumberOfThreads = kWarpSize * kNumberOfWarps;
+constexpr index_t kWarpSize = 32;
+constexpr index_t kNumberOfWarps = 4;
+constexpr index_t kNumberOfThreads = kWarpSize * kNumberOfWarps;
 
 template <typename value_t>
 DEVICE_FUNC uint32_t
@@ -143,9 +143,7 @@ MmaM16N8K16F32Accm(
 
 DEVICE_FUNC uint32_t
 PackHalf2(float f1, float f2) {
-    uint32_t h1 = __half_as_ushort(__float2half_rn(f1));
-    uint32_t h2 = __half_as_ushort(__float2half_rn(f2));
-    return h1 | (h2 << 16);
+    return __half_as_ushort(__float2half_rn(f1)) | (__half_as_ushort(__float2half_rn(f2)) << 16);
 }
 
 DEVICE_FUNC float
