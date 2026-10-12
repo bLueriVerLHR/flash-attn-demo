@@ -63,11 +63,13 @@ if __name__ == "__main__":
         k: torch.Tensor = k.reshape(B, L, H, -1)
         v: torch.Tensor = v.reshape(B, L, H, -1)
         print("Q:", q.shape, ", K:", k.shape, ", V:", v.shape)
-
+        
         # a = torch_attn(q, k, v)
         b = flash_attn(q, k, v)
-        # c = flash_attn_demo_wrapper(q, k, v)
-        # d = flash_attn_demo_cu_wrapper(q, k, v)
-        e = flash_attn_demo_cu_wrapper_v2(q, k, v)
+        
+        with torch.cuda.nvtx.range("attn_v2_B4_L4096_H32_D128"):
+            # c = flash_attn_demo_wrapper(q, k, v)
+            # d = flash_attn_demo_cu_wrapper(q, k, v)
+            e = flash_attn_demo_cu_wrapper_v2(q, k, v)
 
         torch.testing.assert_close(e, b, atol=1e-2, rtol=1e-2)
