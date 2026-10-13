@@ -3,8 +3,8 @@ import torch
 import flash_attn as fa
 
 from lib.utils.timer import cuda_timer
-from lib.kernel import flash_attn_demo
-from lib.cukernel import flash_attn_demo_cu_V1, flash_attn_demo_cu_V2
+from lib.cute_attn.kernel import flash_attn_demo
+from lib.cpp_extensions.cukernel import flash_attn_demo_cu_V1, flash_attn_demo_cu_V2
 
 @cuda_timer("flash_attn")
 def flash_attn(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
@@ -24,7 +24,7 @@ def torch_attn(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
 
 
 @cuda_timer("flash_attn_demo")
-def flash_attn_demo_wrapper(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
+def flash_attn_demo_cute_wrapper(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
     return flash_attn_demo(Q, K, V)
 
 
@@ -52,24 +52,47 @@ if __name__ == "__main__":
     torch.manual_seed(42)
 
     config = [
-        (4, 1024, 4096, 32),
-        (4, 4096, 4096, 32),
-        (8, 2048, 4096, 32),
+        # (1, 128, 1, 128),
+        (4, 4096, 32, 128),
+        # (8, 2048, 32, 128),
     ]
 
-    for B, L, D, H in config:
-        q, k, v = build_qkv(B, L, D)
-        q: torch.Tensor = q.reshape(B, L, H, -1)
-        k: torch.Tensor = k.reshape(B, L, H, -1)
-        v: torch.Tensor = v.reshape(B, L, H, -1)
+    for B, L, H, D in config:
+        q = torch.randn((B, L, H, D), device="cuda", dtype=torch.float16)
+        k = torch.randn_like(q)
+        v = torch.randn_like(q)
         print("Q:", q.shape, ", K:", k.shape, ", V:", v.shape)
         
         # a = torch_attn(q, k, v)
         b = flash_attn(q, k, v)
         
         with torch.cuda.nvtx.range("attn_v2_B4_L4096_H32_D128"):
-            # c = flash_attn_demo_wrapper(q, k, v)
+            c = flash_attn_demo_cute_wrapper(q, k, v)
             # d = flash_attn_demo_cu_wrapper(q, k, v)
-            e = flash_attn_demo_cu_wrapper_v2(q, k, v)
+            # e = flash_attn_demo_cu_wrapper_v2(q, k, v)
 
-        torch.testing.assert_close(e, b, atol=1e-2, rtol=1e-2)
+            # ref = v.float().mean(dim=1, keepdim=True).expand_as(v)
+
+            # error = (c.float() - ref).abs()
+            # print(
+            #     f"L={L}, "
+            #     f"max_abs={error.max().item():.6f}, "
+            #     f"mean_abs={error.mean().item():.6f}"
+            # )
+
+            # torch.testing.assert_close(
+            #     c.float(), ref,
+            #     atol=1e-2, rtol=1e-2,
+            # )
+        # print(
+        #     "[REF o00]",
+        #     "kv=0:", v[0, :64, 0, 0].float().sum().item(),
+        #     "kv=1:", v[0, :128, 0, 0].float().sum().item(),
+        # )
+
+        # print(
+        #     "[FINAL 00]",
+        #     "actual:", c[0, 0, 0, 0].item(),
+        #     "expected:", v[0, :128, 0, 0].float().mean().item(),
+        # )
+        torch.testing.assert_close(c, b, atol=1e-2, rtol=1e-2)
