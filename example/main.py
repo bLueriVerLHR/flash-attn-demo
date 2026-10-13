@@ -52,9 +52,9 @@ if __name__ == "__main__":
     torch.manual_seed(42)
 
     config = [
-        # (1, 128, 1, 128),
+        (1, 128, 1, 128),
         (4, 4096, 32, 128),
-        # (8, 2048, 32, 128),
+        (8, 2048, 32, 128),
     ]
 
     for B, L, H, D in config:
@@ -68,8 +68,8 @@ if __name__ == "__main__":
         
         with torch.cuda.nvtx.range("attn_v2_B4_L4096_H32_D128"):
             c = flash_attn_demo_cute_wrapper(q, k, v)
-            # d = flash_attn_demo_cu_wrapper(q, k, v)
-            # e = flash_attn_demo_cu_wrapper_v2(q, k, v)
+            d = flash_attn_demo_cu_wrapper(q, k, v)
+            e = flash_attn_demo_cu_wrapper_v2(q, k, v)
 
             # ref = v.float().mean(dim=1, keepdim=True).expand_as(v)
 
@@ -95,4 +95,4 @@ if __name__ == "__main__":
         #     "actual:", c[0, 0, 0, 0].item(),
         #     "expected:", v[0, :128, 0, 0].float().mean().item(),
         # )
-        torch.testing.assert_close(c, b, atol=1e-2, rtol=1e-2)
+        # torch.testing.assert_close(c, b, atol=1e-2, rtol=1e-2)

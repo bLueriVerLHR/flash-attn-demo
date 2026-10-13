@@ -39,8 +39,8 @@ def _report(sink: Any, label: str, stats: dict) -> None:
 
 def cuda_timer(
     name: Optional[str] = None,
-    warmup: int = 2,
-    rep: int = 5,
+    warmup: int = 10,
+    rep: int = 20,
     *,
     sink: Any = "stdout",
     nvtx: bool = False,
