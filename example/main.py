@@ -1,98 +1,71 @@
-import math
-import torch
-import flash_attn as fa
-
-from lib.utils.timer import cuda_timer
-from lib.cute_attn.kernel import flash_attn_demo
-from lib.cpp_extensions.cukernel import flash_attn_demo_cu_V1, flash_attn_demo_cu_V2
-
-@cuda_timer("flash_attn")
-def flash_attn(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
-    return fa.flash_attn_func(Q, K, V)
+"""Compare attention backends; CUDA imports happen only after CLI validation."""
+from enum import Enum
+from pathlib import Path
+from typing import Annotated
+import typer
+from lib.utils.benchmark import BenchmarkShape, TimingConfig
+from lib.utils.artifacts import configure_runtime_paths, new_run_directory
 
 
-@cuda_timer("torch_attn")
-def torch_attn(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
-    Q = Q.transpose(-2, -3)
-    K = K.transpose(-2, -3)
-    V = V.transpose(-2, -3)
-
-    KT = K.transpose(-1, -2)
-    P = torch.softmax(Q @ KT / math.sqrt(Q.shape[-1]), dim=-1)
-    result = P @ V
-    return result.transpose(-2, -3)
+class Preset(str, Enum):
+    tiny = 'tiny'
+    demo = 'demo'
+    gqa = 'gqa'
 
 
-@cuda_timer("flash_attn_demo")
-def flash_attn_demo_cute_wrapper(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
-    return flash_attn_demo(Q, K, V)
+class Backend(str, Enum):
+    cute_ffi = 'cute-ffi'
+    cute_dlpack = 'cute-dlpack'
+    prepared_ffi = 'prepared-ffi'
+    prepared_dlpack = 'prepared-dlpack'
+    cuda2 = 'cuda2'
+    flash = 'flash'
+    torch = 'torch'
+    legacy = 'legacy'
 
 
-@cuda_timer("flash_attn_demo_cuda")
-def flash_attn_demo_cu_wrapper(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
-    return flash_attn_demo_cu_V1.flash_attn_demo_cu(Q, K, V)
+class Mode(str, Enum):
+    events = 'events'
+    graph = 'graph'
+    wall = 'wall'
+    enqueue = 'enqueue'
 
 
-@cuda_timer("flash_attn_demo_cuda_v2")
-def flash_attn_demo_cu_wrapper_v2(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor):
-    return flash_attn_demo_cu_V2.flash_attn_demo_cu(Q, K, V)
+PRESETS = {
+    Preset.tiny: ['1,128,1,128'],
+    Preset.demo: ['1,128,1,128', '4,4096,32,128', '8,2048,32,128'],
+    Preset.gqa: ['1,192,4,128,2', '1,256,8,64,1'],
+}
 
 
-def build_qkv(batch_size: int, seq_len: int, d_model: int):
-    config_tuple = (batch_size, seq_len, d_model)
-    demoqkv = []
-    for _ in range(3):
-        x = torch.randn(*config_tuple, dtype=torch.float16, device='cuda')
-        demoqkv.append(x)
-    return demoqkv
+def main(
+    preset: Preset = Preset.demo,
+    shape: Annotated[list[str] | None, typer.Option(help='Repeatable B,L,H,D[,HK]; overrides preset.')] = None,
+    backend: Annotated[list[Backend] | None, typer.Option(help='Repeat to compare backends.')] = None,
+    mode: Annotated[list[Mode] | None, typer.Option(help='Repeat to select timing modes.')] = None,
+    warmup: Annotated[int, typer.Option(min=1)] = 5,
+    repeat: Annotated[int, typer.Option(min=2)] = 15,
+    graph_calls: Annotated[int, typer.Option(min=1)] = 5,
+    seed: int = 42,
+    device: Annotated[str, typer.Option(help='Logical device after CUDA_VISIBLE_DEVICES.')] = 'cuda:0',
+    output: Annotated[Path | None, typer.Option(help='JSON path; defaults to a unique /tmp run.')] = None,
+):
+    """Correctness-first CuTe / CUDA Kernel 2 attention comparison."""
+    try:
+        shapes = [BenchmarkShape.parse(text) for text in (shape or PRESETS[preset])]
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint='--shape') from error
+    backends = [value.value for value in (backend or [Backend.cute_ffi, Backend.cuda2, Backend.flash])]
+    modes = [value.value for value in (mode or [Mode.events, Mode.graph, Mode.wall])]
+    if 'cuda2' in backends and any(item.head_dim != 128 for item in shapes):
+        raise typer.BadParameter('CUDA Kernel 2 requires D=128; omit --backend cuda2 for D=64.', param_hint='--backend')
+
+    configure_runtime_paths()
+    output = output or new_run_directory('benchmark') / 'results.json'
+    from lib.utils.benchmark import run_suite
+    run_suite(shapes, backends, TimingConfig(warmup, repeat, graph_calls), modes, output, seed, device)
+    typer.echo(f'\nEvidence: {output}')
 
 
-if __name__ == "__main__":
-    torch.cuda.set_device(0)
-    torch.manual_seed(42)
-
-    config = [
-        (1, 128, 1, 128),
-        (4, 4096, 32, 128),
-        (8, 2048, 32, 128),
-    ]
-
-    for B, L, H, D in config:
-        q = torch.randn((B, L, H, D), device="cuda", dtype=torch.float16)
-        k = torch.randn_like(q)
-        v = torch.randn_like(q)
-        print("Q:", q.shape, ", K:", k.shape, ", V:", v.shape)
-        
-        # a = torch_attn(q, k, v)
-        b = flash_attn(q, k, v)
-        
-        with torch.cuda.nvtx.range("attn_v2_B4_L4096_H32_D128"):
-            c = flash_attn_demo_cute_wrapper(q, k, v)
-            d = flash_attn_demo_cu_wrapper(q, k, v)
-            e = flash_attn_demo_cu_wrapper_v2(q, k, v)
-
-            # ref = v.float().mean(dim=1, keepdim=True).expand_as(v)
-
-            # error = (c.float() - ref).abs()
-            # print(
-            #     f"L={L}, "
-            #     f"max_abs={error.max().item():.6f}, "
-            #     f"mean_abs={error.mean().item():.6f}"
-            # )
-
-            # torch.testing.assert_close(
-            #     c.float(), ref,
-            #     atol=1e-2, rtol=1e-2,
-            # )
-        # print(
-        #     "[REF o00]",
-        #     "kv=0:", v[0, :64, 0, 0].float().sum().item(),
-        #     "kv=1:", v[0, :128, 0, 0].float().sum().item(),
-        # )
-
-        # print(
-        #     "[FINAL 00]",
-        #     "actual:", c[0, 0, 0, 0].item(),
-        #     "expected:", v[0, :128, 0, 0].float().mean().item(),
-        # )
-        # torch.testing.assert_close(c, b, atol=1e-2, rtol=1e-2)
+if __name__ == '__main__':
+    typer.run(main)
